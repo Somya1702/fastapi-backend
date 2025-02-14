@@ -8,6 +8,10 @@ import openai
 
 app = FastAPI()
 
+@app.get("/")
+def home():
+    return {"message": "FastAPI is running on Render!"}
+
 # ✅ Fix CORS Issue
 app.add_middleware(
     CORSMiddleware,
