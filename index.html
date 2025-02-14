@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Get Word Reply from PDF</title>
+    <style>
+        /* Global Styles */
+        body {
+            font-family: 'Arial', sans-serif;
+            background: #e6f7ff;  /* Lightest Blue */
+            color: #333;
+            text-align: center;
+            margin: 0;
+            padding: 0;
+        }
+
+        h2 {
+            margin-top: 50px;
+            font-size: 28px;
+            font-weight: bold;
+        }
+
+        /* Container */
+        .container {
+            background: white;
+            width: 60%;
+            margin: 50px auto;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0px 6px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Input Styling */
+        input {
+            display: none;
+        }
+
+        .file-label {
+            padding: 12px 15px;
+            font-size: 16px;
+            font-weight: bold;
+            background-color: #28a745; /* Green */
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: 0.3s;
+            display: inline-block;
+        }
+
+        .file-label:hover {
+            background-color: #218838;
+        }
+
+        /* Button Styling */
+        .button-container {
+            display: flex;
+            justify-content: center;
+            gap: 50px;
+            margin-top: 20px;
+        }
+
+        .button-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        button {
+            padding: 12px 20px;
+            font-size: 16px;
+            font-weight: bold;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: 0.3s;
+            color: white;
+            min-width: 150px;
+        }
+
+        .btn-upload {
+            background-color: #007bff;
+            display: none; /* Hidden initially */
+        }
+
+        .btn-upload:hover {
+            background-color: #0056b3;
+        }
+
+        .btn-generate {
+            background-color: #FFA500;
+            display: none;
+        }
+
+        .btn-generate:hover {
+            background-color: #e69500;
+        }
+
+        .btn-download {
+            background-color: #17a2b8;
+            display: none;
+        }
+
+        .btn-download:hover {
+            background-color: #117a8b;
+        }
+
+        /* Status Messages */
+        .status {
+            font-size: 16px;
+            font-weight: bold;
+            margin-top: 10px;
+            display: block;
+            text-align: center;
+        }
+
+        .success {
+            color: #28a745;
+        }
+
+        .error {
+            color: #dc3545;
+        }
+
+        .loading {
+            color: #ffc107;
+        }
+
+        .file-status {
+            font-size: 16px;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h2>Get Word Reply from PDF</h2>
+
+    <div class="container">
+        <!-- Upload Section -->
+        <label for="pdfUpload" class="file-label">Choose PDF</label>
+        <input type="file" id="pdfUpload" onchange="displayFileName()">
+        <span id="fileName" class="file-status"></span> <!-- Displays the file name -->
+        <br>
+
+        <!-- Buttons & Status Messages -->
+        <div class="button-container">
+            <div class="button-group">
+                <button class="btn-upload" id="uploadBtn" onclick="uploadPDF()">Upload</button>
+                <span id="uploadStatus" class="status"> </span> <!-- Upload status here -->
+            </div>
+            <div class="button-group">
+                <button class="btn-generate" id="generateBtn" onclick="generateFile()">Generate</button>
+                <span id="generateStatus" class="status"> </span> <!-- Generate status here -->
+            </div>
+            <div class="button-group">
+                <button class="btn-download" id="downloadBtn" onclick="downloadWord()">Download</button>
+                <span id="downloadStatus" class="status"> </span> <!-- Download status here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let uploaded = false;
+
+        function displayFileName() {
+            let fileInput = document.getElementById("pdfUpload");
+            let fileNameDisplay = document.getElementById("fileName");
+
+            if (fileInput.files.length > 0) {
+                fileNameDisplay.innerText = "📄 " + fileInput.files[0].name;
+                fileNameDisplay.className = "file-status success";
+                document.getElementById("uploadBtn").style.display = "inline-block";  // Show Upload button
+            } else {
+                fileNameDisplay.innerText = "";
+                document.getElementById("uploadBtn").style.display = "none";  // Hide Upload button if no file selected
+            }
+        }
+
+        async function uploadPDF() {
+            let fileInput = document.getElementById("pdfUpload");
+            let formData = new FormData();
+
+            if (!fileInput.files.length) {
+                document.getElementById("uploadStatus").innerText = "❌ Please select a file.";
+                document.getElementById("uploadStatus").className = "status error";
+                return;
+            }
+
+            formData.append("file", fileInput.files[0]);
+            document.getElementById("uploadStatus").innerText = "⏳ Uploading...";
+            document.getElementById("uploadStatus").className = "status loading";
+
+            try {
+                let response = await fetch("http://127.0.0.1:8000/upload/", {
+                    method: "POST",
+                    body: formData
+                });
+
+                let result = await response.json();
+                console.log("Server Response:", result);
+
+                if (result.message === "Success") {
+                    uploaded = true;
+                    document.getElementById("uploadStatus").innerText = "✅ Uploaded!";
+                    document.getElementById("uploadStatus").className = "status success";
+                    document.getElementById("generateBtn").style.display = "inline-block";
+                } else {
+                    document.getElementById("uploadStatus").innerText = "❌ Error!";
+                    document.getElementById("uploadStatus").className = "status error";
+                }
+            } catch (error) {
+                console.error("Upload error:", error);
+                document.getElementById("uploadStatus").innerText = "❌ Failed!";
+                document.getElementById("uploadStatus").className = "status error";
+            }
+        }
+
+        async function generateFile() {
+            if (!uploaded) {
+                document.getElementById("generateStatus").innerText = "❌ Please upload a file first.";
+                document.getElementById("generateStatus").className = "status error";
+                return;
+            }
+            
+            document.getElementById("generateStatus").innerText = "⏳ Generating...";
+            document.getElementById("generateStatus").className = "status loading";
+            
+            setTimeout(() => {
+                document.getElementById("generateStatus").innerText = "✅ Ready!";
+                document.getElementById("generateStatus").className = "status success";
+                document.getElementById("downloadBtn").style.display = "inline-block";
+            }, 3000);
+        }
+
+        function downloadWord() {
+            console.log("Downloading file...");
+            document.getElementById("downloadStatus").innerText = "✅ Downloaded!";
+            document.getElementById("downloadStatus").className = "status success";
+            window.location.href = "http://127.0.0.1:8000/download/";
+        }
+    </script>
+</body>
+</html>
