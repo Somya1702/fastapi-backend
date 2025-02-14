@@ -5,241 +5,172 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Get Word Reply from PDF</title>
     <style>
-        /* Global Styles */
         body {
-            font-family: 'Arial', sans-serif;
-            background: #e6f7ff;  /* Lightest Blue */
-            color: #333;
+            font-family: Arial, sans-serif;
+            background-color: #E3F2FD; /* Light blue background */
             text-align: center;
-            margin: 0;
-            padding: 0;
+            padding: 50px;
         }
-
-        h2 {
-            margin-top: 50px;
-            font-size: 28px;
-            font-weight: bold;
-        }
-
-        /* Container */
         .container {
             background: white;
-            width: 60%;
-            margin: 50px auto;
-            padding: 20px;
-            border-radius: 12px;
-            box-shadow: 0px 6px 15px rgba(0, 0, 0, 0.2);
-        }
-
-        /* Input Styling */
-        input {
-            display: none;
-        }
-
-        .file-label {
-            padding: 12px 15px;
-            font-size: 16px;
-            font-weight: bold;
-            background-color: #28a745; /* Green */
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: 0.3s;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
             display: inline-block;
-        }
-
-        .file-label:hover {
-            background-color: #218838;
-        }
-
-        /* Button Styling */
-        .button-container {
-            display: flex;
-            justify-content: center;
-            gap: 50px;
-            margin-top: 20px;
-        }
-
-        .button-group {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        button {
-            padding: 12px 20px;
-            font-size: 16px;
-            font-weight: bold;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: 0.3s;
-            color: white;
-            min-width: 150px;
-        }
-
-        .btn-upload {
-            background-color: #007bff;
-            display: none; /* Hidden initially */
-        }
-
-        .btn-upload:hover {
-            background-color: #0056b3;
-        }
-
-        .btn-generate {
-            background-color: #FFA500;
-            display: none;
-        }
-
-        .btn-generate:hover {
-            background-color: #e69500;
-        }
-
-        .btn-download {
-            background-color: #17a2b8;
-            display: none;
-        }
-
-        .btn-download:hover {
-            background-color: #117a8b;
-        }
-
-        /* Status Messages */
-        .status {
-            font-size: 16px;
-            font-weight: bold;
-            margin-top: 10px;
-            display: block;
             text-align: center;
         }
-
-        .success {
-            color: #28a745;
+        input[type="file"] {
+            display: none;
         }
-
-        .error {
-            color: #dc3545;
-        }
-
-        .loading {
-            color: #ffc107;
-        }
-
-        .file-status {
-            font-size: 16px;
-            margin-top: 10px;
+        .custom-file-upload {
+            background-color: #007BFF;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
             font-weight: bold;
+            display: inline-block;
+        }
+        .custom-file-upload:hover {
+            background-color: #0056b3;
+        }
+        button {
+            background-color: #28A745;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            margin: 10px;
+        }
+        button:hover {
+            background-color: #218838;
+        }
+        #status {
+            margin-top: 10px;
+            font-size: 16px;
+            font-weight: bold;
+            color: #333;
         }
     </style>
 </head>
 <body>
-    <h2>Get Word Reply from PDF</h2>
 
     <div class="container">
-        <!-- Upload Section -->
-        <label for="pdfUpload" class="file-label">Choose PDF</label>
-        <input type="file" id="pdfUpload" onchange="displayFileName()">
-        <span id="fileName" class="file-status"></span> <!-- Displays the file name -->
-        <br>
+        <h1>Get Word Reply from PDF</h1>
+        
+        <!-- File Upload Button -->
+        <label for="file-upload" class="custom-file-upload">Choose PDF File</label>
+        <input type="file" id="file-upload" accept="application/pdf">
+        <span id="file-name"></span> <!-- Display selected file name -->
+        
+        <br><br>
+        
+        <!-- Upload Button -->
+        <button id="upload-btn" onclick="uploadPDF()" disabled>Upload</button>
+        <p id="upload-status"></p>
 
-        <!-- Buttons & Status Messages -->
-        <div class="button-container">
-            <div class="button-group">
-                <button class="btn-upload" id="uploadBtn" onclick="uploadPDF()">Upload</button>
-                <span id="uploadStatus" class="status"> </span> <!-- Upload status here -->
-            </div>
-            <div class="button-group">
-                <button class="btn-generate" id="generateBtn" onclick="generateFile()">Generate</button>
-                <span id="generateStatus" class="status"> </span> <!-- Generate status here -->
-            </div>
-            <div class="button-group">
-                <button class="btn-download" id="downloadBtn" onclick="downloadWord()">Download</button>
-                <span id="downloadStatus" class="status"> </span> <!-- Download status here -->
-            </div>
-        </div>
+        <!-- Generate Button -->
+        <button id="generate-btn" onclick="generateWord()" disabled>Generate</button>
+        <p id="generate-status"></p>
+
+        <!-- Download Button -->
+        <button id="download-btn" onclick="downloadWord()" disabled>Download</button>
+        <p id="download-status"></p>
     </div>
 
     <script>
-        let uploaded = false;
+        let selectedFile = null;
 
-        function displayFileName() {
-            let fileInput = document.getElementById("pdfUpload");
-            let fileNameDisplay = document.getElementById("fileName");
-
-            if (fileInput.files.length > 0) {
-                fileNameDisplay.innerText = "📄 " + fileInput.files[0].name;
-                fileNameDisplay.className = "file-status success";
-                document.getElementById("uploadBtn").style.display = "inline-block";  // Show Upload button
-            } else {
-                fileNameDisplay.innerText = "";
-                document.getElementById("uploadBtn").style.display = "none";  // Hide Upload button if no file selected
-            }
-        }
+        document.getElementById("file-upload").addEventListener("change", function(event) {
+            selectedFile = event.target.files[0];
+            document.getElementById("file-name").textContent = selectedFile ? selectedFile.name : "";
+            document.getElementById("upload-btn").disabled = !selectedFile; // Enable Upload button if a file is selected
+        });
 
         async function uploadPDF() {
-            let fileInput = document.getElementById("pdfUpload");
-            let formData = new FormData();
-
-            if (!fileInput.files.length) {
-                document.getElementById("uploadStatus").innerText = "❌ Please select a file.";
-                document.getElementById("uploadStatus").className = "status error";
+            if (!selectedFile) {
+                alert("Please select a PDF file first!");
                 return;
             }
 
-            formData.append("file", fileInput.files[0]);
-            document.getElementById("uploadStatus").innerText = "⏳ Uploading...";
-            document.getElementById("uploadStatus").className = "status loading";
+            let formData = new FormData();
+            formData.append("file", selectedFile);
 
+            document.getElementById("upload-status").textContent = "Uploading...";
+            
             try {
-                let response = await fetch("http://127.0.0.1:8000/upload/", {
+                let response = await fetch("https://fastapi-backend-f2mt.onrender.com/upload/", {
                     method: "POST",
                     body: formData
                 });
 
                 let result = await response.json();
-                console.log("Server Response:", result);
-
-                if (result.message === "Success") {
-                    uploaded = true;
-                    document.getElementById("uploadStatus").innerText = "✅ Uploaded!";
-                    document.getElementById("uploadStatus").className = "status success";
-                    document.getElementById("generateBtn").style.display = "inline-block";
+                
+                if (response.ok) {
+                    document.getElementById("upload-status").textContent = "Uploaded successfully!";
+                    document.getElementById("generate-btn").disabled = false; // Enable Generate button
                 } else {
-                    document.getElementById("uploadStatus").innerText = "❌ Error!";
-                    document.getElementById("uploadStatus").className = "status error";
+                    document.getElementById("upload-status").textContent = "Upload failed!";
+                    console.error(result);
                 }
             } catch (error) {
-                console.error("Upload error:", error);
-                document.getElementById("uploadStatus").innerText = "❌ Failed!";
-                document.getElementById("uploadStatus").className = "status error";
+                document.getElementById("upload-status").textContent = "Error uploading file!";
+                console.error(error);
             }
         }
 
-        async function generateFile() {
-            if (!uploaded) {
-                document.getElementById("generateStatus").innerText = "❌ Please upload a file first.";
-                document.getElementById("generateStatus").className = "status error";
-                return;
+        async function generateWord() {
+            document.getElementById("generate-status").textContent = "Generating Word file...";
+            
+            try {
+                let response = await fetch("https://fastapi-backend-f2mt.onrender.com/generate-word/", {
+                    method: "POST"
+                });
+
+                let result = await response.json();
+                
+                if (response.ok) {
+                    document.getElementById("generate-status").textContent = "Word file generated!";
+                    document.getElementById("download-btn").disabled = false; // Enable Download button
+                } else {
+                    document.getElementById("generate-status").textContent = "Generation failed!";
+                    console.error(result);
+                }
+            } catch (error) {
+                document.getElementById("generate-status").textContent = "Error generating Word file!";
+                console.error(error);
             }
-            
-            document.getElementById("generateStatus").innerText = "⏳ Generating...";
-            document.getElementById("generateStatus").className = "status loading";
-            
-            setTimeout(() => {
-                document.getElementById("generateStatus").innerText = "✅ Ready!";
-                document.getElementById("generateStatus").className = "status success";
-                document.getElementById("downloadBtn").style.display = "inline-block";
-            }, 3000);
         }
 
-        function downloadWord() {
-            console.log("Downloading file...");
-            document.getElementById("downloadStatus").innerText = "✅ Downloaded!";
-            document.getElementById("downloadStatus").className = "status success";
-            window.location.href = "http://127.0.0.1:8000/download/";
+        async function downloadWord() {
+            document.getElementById("download-status").textContent = "Downloading...";
+            
+            try {
+                let response = await fetch("https://fastapi-backend-f2mt.onrender.com/download/", {
+                    method: "GET"
+                });
+
+                if (response.ok) {
+                    let blob = await response.blob();
+                    let link = document.createElement("a");
+                    link.href = URL.createObjectURL(blob);
+                    link.download = "output.docx";
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    document.getElementById("download-status").textContent = "Downloaded!";
+                } else {
+                    document.getElementById("download-status").textContent = "Download failed!";
+                    console.error(await response.text());
+                }
+            } catch (error) {
+                document.getElementById("download-status").textContent = "Error downloading file!";
+                console.error(error);
+            }
         }
     </script>
+
 </body>
 </html>
