@@ -7,7 +7,7 @@
     <style>
         body {
             font-family: Arial, sans-serif;
-            background-color: #E3F2FD; /* Light blue background */
+            background-color: #E3F2FD; /* Lightest Blue */
             text-align: center;
             padding: 50px;
         }
@@ -16,8 +16,8 @@
             padding: 30px;
             border-radius: 10px;
             box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
-            display: inline-block;
-            text-align: center;
+            width: 400px;
+            margin: auto;
         }
         input[type="file"] {
             display: none;
@@ -30,6 +30,8 @@
             cursor: pointer;
             font-weight: bold;
             display: inline-block;
+            width: 100%;
+            margin-bottom: 10px;
         }
         .custom-file-upload:hover {
             background-color: #0056b3;
@@ -42,14 +44,15 @@
             border-radius: 5px;
             cursor: pointer;
             font-weight: bold;
-            margin: 10px;
+            width: 100%;
+            margin-bottom: 10px;
         }
         button:hover {
             background-color: #218838;
         }
-        #status {
-            margin-top: 10px;
-            font-size: 16px;
+        .status {
+            margin-top: 5px;
+            font-size: 14px;
             font-weight: bold;
             color: #333;
         }
@@ -59,25 +62,23 @@
 
     <div class="container">
         <h1>Get Word Reply from PDF</h1>
-        
+
         <!-- File Upload Button -->
         <label for="file-upload" class="custom-file-upload">Choose PDF File</label>
         <input type="file" id="file-upload" accept="application/pdf">
-        <span id="file-name"></span> <!-- Display selected file name -->
-        
-        <br><br>
-        
+        <p id="file-name" class="status"></p> <!-- Display selected file name -->
+
         <!-- Upload Button -->
         <button id="upload-btn" onclick="uploadPDF()" disabled>Upload</button>
-        <p id="upload-status"></p>
+        <p id="upload-status" class="status"></p>
 
         <!-- Generate Button -->
         <button id="generate-btn" onclick="generateWord()" disabled>Generate</button>
-        <p id="generate-status"></p>
+        <p id="generate-status" class="status"></p>
 
         <!-- Download Button -->
         <button id="download-btn" onclick="downloadWord()" disabled>Download</button>
-        <p id="download-status"></p>
+        <p id="download-status" class="status"></p>
     </div>
 
     <script>
@@ -85,7 +86,7 @@
 
         document.getElementById("file-upload").addEventListener("change", function(event) {
             selectedFile = event.target.files[0];
-            document.getElementById("file-name").textContent = selectedFile ? selectedFile.name : "";
+            document.getElementById("file-name").textContent = selectedFile ? "Selected: " + selectedFile.name : "";
             document.getElementById("upload-btn").disabled = !selectedFile; // Enable Upload button if a file is selected
         });
 
