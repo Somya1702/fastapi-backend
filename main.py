@@ -6,9 +6,15 @@ import os
 import fitz  # PyMuPDF for extracting text from PDFs
 import openai
 
-app = FastAPI(docs_url=None, redoc_url=None)  # Disable Swagger UI
+app = FastAPI(  # Enable Swagger UI
+    title="PDF to Word API",
+    description="Upload a PDF, generate a Word file, and download it.",
+    version="1.0.0",
+    docs_url="/docs",  # Ensure FastAPI Swagger UI is enabled
+    redoc_url="/redoc"
+)
 
-# Serve the frontend at the root URL
+# Serve the frontend when visiting the root URL
 @app.get("/")
 def serve_frontend():
     return FileResponse("index.html")  # Ensure index.html is in the same folder as main.py
