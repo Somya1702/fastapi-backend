@@ -6,7 +6,7 @@ import os
 import fitz  # PyMuPDF for extracting text from PDFs
 import openai
 
-app = FastAPI(docs_url=None, redoc_url=None)  # Disable Swagger UI
+app = FastAPI()  # Keep Swagger UI enabled
 
 # Serve the custom frontend at the root URL
 @app.get("/")
