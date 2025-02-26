@@ -8,9 +8,10 @@ import openai
 
 app = FastAPI()
 
+# Serve the frontend when visiting the root URL
 @app.get("/")
-def home():
-    return {"message": "FastAPI is running on Render!"}
+def serve_frontend():
+    return FileResponse("index.html")  # Make sure index.html is in the same directory as main.py
 
 # ✅ Fix CORS Issue
 app.add_middleware(
