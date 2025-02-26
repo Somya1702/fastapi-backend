@@ -5,12 +5,13 @@ from fastapi.responses import FileResponse
 import os
 import fitz  # PyMuPDF for extracting text from PDFs
 import openai
+import re  # For extracting GSTIN
 
 app = FastAPI(  # Enable Swagger UI
     title="PDF to Word API",
-    description="Upload a PDF, generate a Word file, and download it.",
-    version="1.0.0",
-    docs_url="/docs",  # Ensure FastAPI Swagger UI is enabled
+    description="Upload a PDF, extract company details, and generate a Word file.",
+    version="1.0.1",
+    docs_url="/docs",
     redoc_url="/redoc"
 )
 
@@ -28,7 +29,6 @@ app.add_middleware(
     allow_headers=["*"],  # Allows all headers
 )
 
-
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 def extract_text_from_pdf(pdf_path):
@@ -38,33 +38,43 @@ def extract_text_from_pdf(pdf_path):
     for page in pdf_document:
         text += page.get_text("text") + "\n"
 
-    # Trim text to first 2000 characters (GPT handles small inputs better)
-    cleaned_text = text[:2000]  
-    print("📄 Extracted Text (Trimmed):", cleaned_text)  # Debugging
+    # Trim text to first 3000 characters (adjusted for better GPT processing)
+    cleaned_text = text[:3000]  
+    print("📄 Extracted Text (Trimmed):", cleaned_text[:500])  # Debugging
     return cleaned_text
 
-def get_company_name(text):
-    """Send extracted text to OpenAI to get the company name."""
+def extract_gstin(text):
+    """Extract GSTIN from the text using regex"""
+    gstin_pattern = r"\b\d{2}[A-Z]{5}\d{4}[A-Z]{1}\d{1}[Z]{1}[A-Z\d]{1}\b"  # GSTIN regex pattern
+    gstin_match = re.search(gstin_pattern, text)
+    return gstin_match.group(0) if gstin_match else None
+
+def get_company_details(text):
+    """Send extracted text to OpenAI to get the company name and address."""
     client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
     response = client.chat.completions.create(
-        model="gpt-4-turbo",  # Use GPT-4 Turbo
+        model="gpt-4-turbo",
         messages=[
             {"role": "system", "content": 
-                "Extract only the official company name from this document. "
-                "Do not include any extra words, addresses, or descriptions."},
+                "Extract the company name and address from this document. "
+                "Return only structured JSON with 'company_name' and 'address' fields."},
             {"role": "user", "content": text}
         ]
     )
 
-    print("🏢 Extracted Company Name:", response.choices[0].message.content.strip())  # Debugging
-    return response.choices[0].message.content.strip()
+    extracted_data = response.choices[0].message.content.strip()
+    print("🏢 Extracted Data:", extracted_data)  # Debugging
 
-def create_word_file(company_name):
-    """Create a Word file with extracted company name."""
+    return extracted_data
+
+def create_word_file(company_name, gstin, company_address):
+    """Create a Word file with extracted details."""
     doc = Document()
     doc.add_heading("Extracted Information", level=1)
     doc.add_paragraph(f"Company Name: {company_name}")
+    doc.add_paragraph(f"GSTIN: {gstin if gstin else 'Not Found'}")
+    doc.add_paragraph(f"Address: {company_address if company_address else 'Not Found'}")
 
     file_path = "output.docx"
 
@@ -88,11 +98,18 @@ async def upload_pdf(file: UploadFile = File(...)):
         # Extract text from PDF
         extracted_text = extract_text_from_pdf(pdf_path)
 
-        # Send extracted text to OpenAI
-        company_name = get_company_name(extracted_text)
+        # Extract GSTIN
+        gstin = extract_gstin(extracted_text)
+
+        # Send extracted text to OpenAI for Name & Address
+        company_details = get_company_details(extracted_text)
+        
+        # Parse extracted details (Assuming JSON format from GPT)
+        company_name = company_details.get("company_name", "Not Found")
+        company_address = company_details.get("address", "Not Found")
 
         # Generate Word file
-        word_path = create_word_file(company_name)
+        word_path = create_word_file(company_name, gstin, company_address)
         print("📄 Generated Word File at:", word_path)
 
         return {"message": "Success", "download_url": "http://127.0.0.1:8000/download/"}
