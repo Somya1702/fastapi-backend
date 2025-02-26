@@ -6,12 +6,12 @@ import os
 import fitz  # PyMuPDF for extracting text from PDFs
 import openai
 
-app = FastAPI()
+app = FastAPI(docs_url=None, redoc_url=None)  # Disable Swagger UI
 
-# Serve the frontend when visiting the root URL
+# Serve the custom frontend at the root URL
 @app.get("/")
 def serve_frontend():
-    return FileResponse("index.html")  # Make sure index.html is in the same directory as main.py
+    return FileResponse("index.html")  # Ensure index.html is in the same folder as main.py
 
 # ✅ Fix CORS Issue
 app.add_middleware(
