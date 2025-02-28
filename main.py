@@ -70,7 +70,7 @@ def create_word_file(response_text):
     return file_path
 
 @app.post("/upload/")
-async def upload_pdf(file: UploadFile = File(...), prompt: str = Form(...), use_general_prompt: bool = Form(False)):
+async def upload_pdf(file: UploadFile = File(...), prompt: str = Form(...)):
     pdf_path = "latest_uploaded.pdf"
     with open(pdf_path, "wb") as f:
         f.write(await file.read())
@@ -81,7 +81,12 @@ async def upload_pdf(file: UploadFile = File(...), prompt: str = Form(...), use_
     gpt_response = get_gpt_response(extracted_text, prompt)
     word_path = create_word_file(gpt_response)
 
-    return JSONResponse({"message": "Success", "gstin": gstin, "extracted_text": gpt_response, "download_url": "/download/"})
+    return JSONResponse(content={
+        "message": "Success",
+        "gstin": gstin,
+        "extracted_text": gpt_response,
+        "download_url": "/download/"
+    })
 
 @app.get("/download/")
 async def download_file():

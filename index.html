@@ -6,96 +6,131 @@
     <title>Get Word Reply from PDF</title>
     <style>
         body {
+            font-family: Roboto, sans-serif;
             background-color: #e3f2fd;
-            text-align: center;
-            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
         }
         .container {
             background: white;
             padding: 20px;
-            width: 400px;
-            margin: auto;
-            margin-top: 50px;
             border-radius: 10px;
             box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            width: 350px;
         }
         button {
             display: block;
             width: 100%;
             padding: 10px;
-            margin: 10px 0;
+            margin-top: 10px;
             border: none;
-            background: green;
-            color: white;
-            font-size: 16px;
             cursor: pointer;
             border-radius: 5px;
+            font-size: 16px;
         }
-        button:hover {
-            background: darkgreen;
-        }
-        input[type="file"], textarea {
+        #upload-btn { background-color: #4CAF50; color: white; }
+        #generate-btn { background-color: #0288d1; color: white; }
+        #download-btn { background-color: #d32f2f; color: white; }
+        #generalPromptSelect {
             width: 100%;
-            margin-bottom: 10px;
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
         }
     </style>
 </head>
 <body>
-
     <div class="container">
         <h2>Get Word Reply from PDF</h2>
-        <input type="file" id="pdfFile" accept="application/pdf">
-        
+
+        <input type="file" id="pdfFile">
+        <button id="upload-btn" onclick="uploadPDF()">Upload</button>
+
         <label>
-            <input type="checkbox" id="generalCheckbox" onclick="toggleGeneralPrompt()"> Use General Prompt
+            <input type="checkbox" id="generalPromptCheckbox" onchange="togglePrompt()"> Use General Prompt
         </label>
-        
-        <textarea id="customPrompt" placeholder="Enter custom prompt (optional)..." rows="3"></textarea>
-        
-        <button onclick="uploadPDF()">Upload & Extract</button>
-        <button onclick="downloadWord()">Download Word File</button>
-        <p id="status"></p>
+
+        <select id="generalPromptSelect" disabled>
+            <option value="">-- Select a Prompt --</option>
+            <option value="Extract company name and address only.">Company Name & Address</option>
+            <option value="Extract GSTIN and company details.">GSTIN & Company Details</option>
+            <option value="Extract full invoice details from the document.">Full Invoice Details</option>
+        </select>
+
+        <textarea id="customPrompt" placeholder="Enter your custom prompt here..."></textarea>
+
+        <button id="generate-btn" onclick="generateWord()">Generate</button>
+        <button id="download-btn" onclick="downloadWord()" disabled>Download</button>
     </div>
 
     <script>
-        function toggleGeneralPrompt() {
-            let checkbox = document.getElementById("generalCheckbox");
-            let promptBox = document.getElementById("customPrompt");
+        let fileData = null;
 
+        function togglePrompt() {
+            const checkbox = document.getElementById("generalPromptCheckbox");
+            const promptInput = document.getElementById("customPrompt");
+            const generalSelect = document.getElementById("generalPromptSelect");
+            
             if (checkbox.checked) {
-                promptBox.value = "Extract company name, GSTIN, invoice details, and any additional business data.";
-                promptBox.disabled = true;
+                promptInput.disabled = false;
+                generalSelect.disabled = false;
             } else {
-                promptBox.value = "";
-                promptBox.disabled = false;
+                promptInput.disabled = false;
+                generalSelect.disabled = true;
             }
         }
 
-        async function uploadPDF() {
-            let fileInput = document.getElementById("pdfFile");
-            let promptInput = document.getElementById("customPrompt").value;
+        function uploadPDF() {
+            const file = document.getElementById("pdfFile").files[0];
+            if (!file) {
+                alert("Please select a PDF file.");
+                return;
+            }
+            fileData = file;
+            alert("PDF Uploaded Successfully!");
+        }
 
-            if (!fileInput.files.length) {
-                alert("Please choose a PDF file first.");
+        async function generateWord() {
+            if (!fileData) {
+                alert("Please upload a PDF first.");
                 return;
             }
 
-            let formData = new FormData();
-            formData.append("file", fileInput.files[0]);
-            formData.append("prompt", promptInput);
+            const formData = new FormData();
+            formData.append("file", fileData);
 
-            document.getElementById("status").innerText = "Uploading...";
+            const checkbox = document.getElementById("generalPromptCheckbox");
+            let generalPrompt = "";
+            if (checkbox.checked) {
+                generalPrompt = document.getElementById("generalPromptSelect").value;
+            }
 
-            try {
-                let response = await fetch("https://fastapi-backend-f2mt.onrender.com/upload/", {
-                    method: "POST",
-                    body: formData
-                });
+            let customPrompt = document.getElementById("customPrompt").value.trim();
 
-                let result = await response.json();
-                document.getElementById("status").innerText = result.message ? "Upload Successful! Ready to download." : "Upload failed.";
-            } catch (error) {
-                document.getElementById("status").innerText = "Error: " + error.message;
+            // ✅ Combine General & Custom Prompts
+            let finalPrompt = generalPrompt;
+            if (customPrompt) {
+                finalPrompt += " " + customPrompt;
+            }
+
+            formData.append("prompt", finalPrompt);
+
+            const response = await fetch("https://fastapi-backend-f2mt.onrender.com/upload/", {
+                method: "POST",
+                body: formData
+            });
+
+            const result = await response.json();
+            if (result.message === "Success") {
+                alert("Word file generated!");
+                document.getElementById("download-btn").disabled = false;
+            } else {
+                alert("Error: " + result.error);
             }
         }
 
@@ -103,6 +138,5 @@
             window.location.href = "https://fastapi-backend-f2mt.onrender.com/download/";
         }
     </script>
-
 </body>
 </html>
