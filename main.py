@@ -11,9 +11,9 @@ import openai
 import re  
 
 app = FastAPI(
-    title="PDF to Word API",
-    description="Upload a PDF and a Word file with GPT prompt to generate a formatted Word file.",
-    version="1.0.4",
+    title="SCN Reply Drafting API",
+    description="Upload a Show Cause Notice (PDF) and a Word file (GPT Prompt) to generate a structured reply.",
+    version="1.0.6",
     docs_url="/docs",
     redoc_url="/redoc"
 )
@@ -33,39 +33,42 @@ app.add_middleware(
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 def extract_text_from_pdf(pdf_path):
-    """Extract text from a PDF document."""
+    """Extract text from a PDF document (SCN)."""
     text = ""
     pdf_document = fitz.open(pdf_path)
     for page in pdf_document:
         text += page.get_text("text") + "\n"
-    return text[:3000]  
+    return text[:5000]  # Extract more text for legal documents
 
 def extract_gstin(text):
-    """Extract GSTIN using regex pattern matching."""
+    """Extract GSTIN from the Show Cause Notice."""
     gstin_pattern = r"\b\d{2}[A-Z]{5}\d{4}[A-Z]{1}\d{1}[Z]{1}[A-Z\d]{1}\b"
     matches = re.findall(gstin_pattern, text)
     return matches[0] if matches else "Not Found"
 
 def extract_text_from_word(word_path):
-    """Extract text from the uploaded Word file."""
+    """Extracts the GPT prompt instructions from the uploaded Word file."""
     doc = Document(word_path)
-    extracted_text = "\n".join([para.text for para in doc.paragraphs])
+    extracted_text = "\n".join([para.text.strip() for para in doc.paragraphs if para.text.strip()])
     return extracted_text.strip()
 
-def get_gpt_response(text, user_prompt):
-    """Send extracted text and user prompt to OpenAI for processing."""
+def get_gpt_response(sc_notice_text, extracted_prompt):
+    """Processes the SCN text using GPT, following instructions from the Word file."""
     client = openai.OpenAI(api_key=OPENAI_API_KEY)
     response = client.chat.completions.create(
         model="gpt-4-turbo",
-        messages=[{"role": "system", "content": user_prompt}, {"role": "user", "content": text}]
+        messages=[
+            {"role": "system", "content": extracted_prompt},  # Use the uploaded Word file's instructions
+            {"role": "user", "content": sc_notice_text}
+        ]
     )
     return response.choices[0].message.content.strip() or "Not Found"
 
-def create_word_file(response_text):
-    """Generate a structured Word file with correct formatting."""
+def create_word_file(response_text, assessee_name, assessee_address, gstin):
+    """Generate a structured Word file for the reply to the Show Cause Notice."""
     doc = Document()
 
-    # ✅ Add Letterhead (Centered, Bold, Italic, Yellow Highlight)
+    # ✅ Letterhead (Centered, Bold, Italics)
     letterhead = doc.add_paragraph()
     letterhead_run = letterhead.add_run("<LETTERHEAD>")
     letterhead_run.bold = True
@@ -74,7 +77,7 @@ def create_word_file(response_text):
     letterhead_run.font.color.rgb = RGBColor(0, 0, 0)
     letterhead.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
 
-    # ✅ Add "To," on Left and "Date:" on Right
+    # ✅ "To," (Left) and "Date:" (Right)
     to_date_para = doc.add_paragraph()
     to_run = to_date_para.add_run("To,")
     to_run.bold = True
@@ -83,49 +86,49 @@ def create_word_file(response_text):
     date_run = to_date_para.add_run("\t\t\t\t\tDate: " + datetime.today().strftime("%d-%m-%Y"))
     date_run.bold = True
 
-    # ✅ Add Commissioner Address (3 lines, left-aligned)
+    # ✅ Commissioner Address (Left-aligned)
     commissioner_para = doc.add_paragraph("Commissioner of GST & Central Excise,\nCity Name,\nState - Pin Code.")
     commissioner_para.alignment = WD_PARAGRAPH_ALIGNMENT.LEFT
 
-    # ✅ Add Assessee (Taxpayer) Details (Centered, 3 lines)
+    # ✅ Assessee Details (Centered)
     doc.add_paragraph()  # Empty line
     assessee_para = doc.add_paragraph()
     assessee_para.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-    assessee_para.add_run(f"Assessee Name\nAssessee Address\nGSTIN: {extract_gstin(response_text)}").bold = True
+    assessee_para.add_run(f"{assessee_name}\n{assessee_address}\nGSTIN: {gstin}").bold = True
 
-    # ✅ Add Subject Line (Bold)
+    # ✅ Subject Line (Bold)
     doc.add_paragraph("\nSubject: Reply to Show Cause Notice", style="Heading 2")
 
-    # ✅ Add "Sir," Left Aligned
+    # ✅ Salutation
     doc.add_paragraph("\nSir,")
 
-    # ✅ Add "BRIEF FACTS OF THE CASE" in Center with Bold and Underline
+    # ✅ "BRIEF FACTS OF THE CASE" (Centered, Bold, Underlined)
     facts_heading = doc.add_paragraph()
     facts_run = facts_heading.add_run("BRIEF FACTS OF THE CASE")
     facts_run.bold = True
     facts_run.underline = True
     facts_heading.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
 
-    # ✅ Add Case Facts in Justified Paragraph with Numbering
+    # ✅ Case Facts (Numbered, Justified)
     case_facts_para = doc.add_paragraph()
     case_facts_para.alignment = WD_PARAGRAPH_ALIGNMENT.JUSTIFY
     case_facts_list = response_text.split("\n")
     for idx, fact in enumerate(case_facts_list, start=1):
         case_facts_para.add_run(f"{idx}. {fact.strip()}\n")
 
-    # ✅ Save the Word File
-    file_path = "output.docx"
+    # ✅ Save Word File
+    file_path = "SCN_Reply.docx"
     if os.path.exists(file_path):
         os.remove(file_path)
     doc.save(file_path)
     return file_path
 
 @app.post("/upload/")
-async def upload_pdf(
+async def upload_scn(
     pdf_file: UploadFile = File(...), 
     word_file: UploadFile = File(...)
 ):
-    """Upload and process a PDF and a Word file to extract structured data."""
+    """Upload and process a Show Cause Notice and a Word file for GPT instructions."""
     pdf_path = "latest_uploaded.pdf"
     word_path = "uploaded_prompt.docx"
 
@@ -137,22 +140,28 @@ async def upload_pdf(
         f.write(await word_file.read())
 
     extracted_text = extract_text_from_pdf(pdf_path)
-
-    # ✅ Extract prompt from Word file
     extracted_prompt = extract_text_from_word(word_path)
 
-    # ✅ Ask GPT to extract case facts using the extracted prompt
+    # ✅ Extract Assessee Details
+    assessee_name = get_gpt_response(extracted_text, "Extract the taxpayer's name from the SCN.")
+    assessee_address = get_gpt_response(extracted_text, "Extract the taxpayer's address from the SCN.")
+    gstin = extract_gstin(extracted_text)
+
+    # ✅ Process SCN facts using GPT prompt
     gpt_response = get_gpt_response(extracted_text, extracted_prompt)
-    word_path = create_word_file(gpt_response)
+    word_path = create_word_file(gpt_response, assessee_name, assessee_address, gstin)
 
     return JSONResponse(content={
         "message": "Success",
+        "gstin": gstin,
+        "assessee_name": assessee_name,
+        "assessee_address": assessee_address,
         "extracted_text": gpt_response,
         "download_url": "/download/"
     })
 
 @app.get("/download/")
 async def download_file():
-    """Download the generated Word file."""
-    file_path = "output.docx"
-    return FileResponse(file_path, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document", filename="extracted_info.docx")
+    """Download the generated Word file for SCN reply."""
+    file_path = "SCN_Reply.docx"
+    return FileResponse(file_path, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document", filename="SCN_Reply.docx")
