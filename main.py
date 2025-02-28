@@ -1,107 +1,89 @@
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from docx import Document
+from docx.shared import Pt, RGBColor
 from fastapi.responses import FileResponse, JSONResponse
 import os
-import fitz
+import fitz  
 import openai
+import re  
 
 app = FastAPI(
-    title="PDF Extraction API",
-    description="Upload a PDF, provide a custom or predefined prompt, and generate a Word file.",
-    version="1.2.0",
+    title="PDF to Word API",
+    description="Upload a PDF, enter a custom prompt, and generate a Word file.",
+    version="1.0.2",
     docs_url="/docs",
     redoc_url="/redoc"
 )
 
-# ✅ Fix CORS Issue
+@app.get("/")
+def serve_frontend():
+    return FileResponse("index.html")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], 
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"], 
-    allow_headers=["*"]
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-GENERAL_PROMPT = "Extract company name, GSTIN, invoice details, and any additional business data."
-
 def extract_text_from_pdf(pdf_path):
-    """Extracts text from a PDF file"""
     text = ""
     pdf_document = fitz.open(pdf_path)
     for page in pdf_document:
         text += page.get_text("text") + "\n"
-    return text[:3000]  # Trim text to first 3000 characters
+    return text[:3000]  
 
-def query_gpt(prompt, extracted_text):
-    """Send the extracted text along with a user-defined prompt to GPT"""
+def extract_gstin(text):
+    gstin_pattern = r"\b\d{2}[A-Z]{5}\d{4}[A-Z]{1}\d{1}[Z]{1}[A-Z\d]{1}\b"
+    matches = re.findall(gstin_pattern, text)
+    return matches[0] if matches else "Not Found"
+
+def get_gpt_response(text, user_prompt):
     client = openai.OpenAI(api_key=OPENAI_API_KEY)
-
     response = client.chat.completions.create(
         model="gpt-4-turbo",
-        messages=[
-            {"role": "system", "content": "You are a helpful assistant that extracts structured information from PDFs."},
-            {"role": "user", "content": f"{prompt}\n\nText from PDF:\n{extracted_text}"}
-        ]
+        messages=[{"role": "system", "content": user_prompt}, {"role": "user", "content": text}]
     )
+    return response.choices[0].message.content.strip() or "Not Found"
 
-    return response.choices[0].message.content.strip()
-
-def create_word_file(extracted_info):
-    """Create a Word file with extracted details."""
+def create_word_file(response_text):
     doc = Document()
-    doc.add_heading("Extracted Information", level=1)
-    doc.add_paragraph(extracted_info)
+    title = doc.add_heading("Extracted Information", level=1)
+    title.runs[0].font.name = "Roboto"
+    title.runs[0].font.size = Pt(14)
+    title.runs[0].font.color.rgb = RGBColor(0, 0, 0)
+
+    paragraph = doc.add_paragraph(response_text)
+    run = paragraph.runs[0]
+    run.font.name = "Roboto"
+    run.font.size = Pt(11)
+    run.font.color.rgb = RGBColor(0, 0, 0)
 
     file_path = "output.docx"
     if os.path.exists(file_path):
         os.remove(file_path)
-
     doc.save(file_path)
     return file_path
 
 @app.post("/upload/")
-async def upload_pdf(file: UploadFile = File(...), prompt: str = Form(...)):
-    try:
-        # Use General Prompt if user didn't enter any custom prompt
-        final_prompt = prompt if prompt.strip() else GENERAL_PROMPT
+async def upload_pdf(file: UploadFile = File(...), prompt: str = Form(...), use_general_prompt: bool = Form(False)):
+    pdf_path = "latest_uploaded.pdf"
+    with open(pdf_path, "wb") as f:
+        f.write(await file.read())
 
-        # Save uploaded file locally
-        pdf_path = "latest_uploaded.pdf"
-        with open(pdf_path, "wb") as f:
-            f.write(await file.read())
+    extracted_text = extract_text_from_pdf(pdf_path)
+    gstin = extract_gstin(extracted_text)
+    
+    gpt_response = get_gpt_response(extracted_text, prompt)
+    word_path = create_word_file(gpt_response)
 
-        print("✅ New PDF uploaded:", pdf_path)
-
-        # Extract text from PDF
-        extracted_text = extract_text_from_pdf(pdf_path)
-
-        # Send extracted text to GPT with the selected prompt
-        extracted_info = query_gpt(final_prompt, extracted_text)
-
-        # Generate Word file
-        word_path = create_word_file(extracted_info)
-        print("📄 Generated Word File at:", word_path)
-
-        return JSONResponse(content={
-            "message": "Success",
-            "extracted_info": extracted_info,
-            "download_url": "https://fastapi-backend-f2mt.onrender.com/download/"
-        })
-    except Exception as e:
-        print("❌ Error:", str(e))
-        return JSONResponse(content={"error": str(e)}, status_code=500)
+    return JSONResponse({"message": "Success", "gstin": gstin, "extracted_text": gpt_response, "download_url": "/download/"})
 
 @app.get("/download/")
 async def download_file():
     file_path = "output.docx"
-    if not os.path.exists(file_path):
-        return JSONResponse(content={"error": "File not found. Upload a PDF first."}, status_code=404)
-    
-    return FileResponse(
-        path=file_path,
-        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        filename="extracted_info.docx"
-    )
+    return FileResponse(file_path, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document", filename="extracted_info.docx")
