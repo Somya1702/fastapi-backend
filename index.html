@@ -6,7 +6,7 @@
     <title>Get Word Reply from PDF</title>
     <style>
         body {
-            background-color: #e3f2fd; /* Light blue background */
+            background-color: #e3f2fd;
             text-align: center;
             font-family: Arial, sans-serif;
         }
@@ -45,13 +45,32 @@
     <div class="container">
         <h2>Get Word Reply from PDF</h2>
         <input type="file" id="pdfFile" accept="application/pdf">
-        <textarea id="customPrompt" placeholder="Enter your custom prompt for GPT..." rows="3"></textarea>
+        
+        <label>
+            <input type="checkbox" id="generalCheckbox" onclick="toggleGeneralPrompt()"> Use General Prompt
+        </label>
+        
+        <textarea id="customPrompt" placeholder="Enter custom prompt (optional)..." rows="3"></textarea>
+        
         <button onclick="uploadPDF()">Upload & Extract</button>
         <button onclick="downloadWord()">Download Word File</button>
         <p id="status"></p>
     </div>
 
     <script>
+        function toggleGeneralPrompt() {
+            let checkbox = document.getElementById("generalCheckbox");
+            let promptBox = document.getElementById("customPrompt");
+
+            if (checkbox.checked) {
+                promptBox.value = "Extract company name, GSTIN, invoice details, and any additional business data.";
+                promptBox.disabled = true;
+            } else {
+                promptBox.value = "";
+                promptBox.disabled = false;
+            }
+        }
+
         async function uploadPDF() {
             let fileInput = document.getElementById("pdfFile");
             let promptInput = document.getElementById("customPrompt").value;
@@ -63,7 +82,7 @@
 
             let formData = new FormData();
             formData.append("file", fileInput.files[0]);
-            formData.append("prompt", promptInput); // Sending the custom prompt
+            formData.append("prompt", promptInput);
 
             document.getElementById("status").innerText = "Uploading...";
 
