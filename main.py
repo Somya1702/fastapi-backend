@@ -2,9 +2,6 @@ from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from docx import Document
 from docx.shared import Pt, RGBColor
-from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
-from docx.oxml import OxmlElement
-from datetime import datetime
 from fastapi.responses import FileResponse, JSONResponse
 import os
 import fitz  
@@ -14,7 +11,7 @@ import re
 app = FastAPI(
     title="PDF to Word API",
     description="Upload a PDF, enter a custom prompt, and generate a Word file.",
-    version="1.0.3",
+    version="1.0.2",
     docs_url="/docs",
     redoc_url="/redoc"
 )
@@ -53,65 +50,19 @@ def get_gpt_response(text, user_prompt):
     )
     return response.choices[0].message.content.strip() or "Not Found"
 
-def create_word_file(assessee_name, assessee_address, gstin, case_facts):
-    """Create a structured Word file based on provided formatting guidelines."""
+def create_word_file(response_text):
     doc = Document()
+    title = doc.add_heading("Extracted Information", level=1)
+    title.runs[0].font.name = "Roboto"
+    title.runs[0].font.size = Pt(14)
+    title.runs[0].font.color.rgb = RGBColor(0, 0, 0)
 
-    # ✅ Add Letterhead in center with bold, italics, and yellow highlight
-    letterhead = doc.add_paragraph()
-    letterhead_run = letterhead.add_run("<LETTERHEAD>")
-    letterhead_run.bold = True
-    letterhead_run.italic = True
-    letterhead_run.font.size = Pt(14)
-    letterhead_run.font.color.rgb = RGBColor(0, 0, 0)
-    
-    # Apply yellow highlight
-    highlight = OxmlElement("w:highlight")
-    highlight.set("w:val", "yellow")
-    letterhead_run._r.get_or_add_rPr().append(highlight)
-    
-    letterhead.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+    paragraph = doc.add_paragraph(response_text)
+    run = paragraph.runs[0]
+    run.font.name = "Roboto"
+    run.font.size = Pt(11)
+    run.font.color.rgb = RGBColor(0, 0, 0)
 
-    # ✅ Add "To," on the left and "Date:" on the right
-    to_date_para = doc.add_paragraph()
-    to_run = to_date_para.add_run("To,")
-    to_run.bold = True
-    to_date_para.alignment = WD_PARAGRAPH_ALIGNMENT.LEFT
-
-    date_run = to_date_para.add_run("\t\t\t\t\tDate: " + datetime.today().strftime("%d-%m-%Y"))
-    date_run.bold = True
-
-    # ✅ Add Commissioner Address (3 lines, left-aligned)
-    commissioner_para = doc.add_paragraph("Commissioner of GST & Central Excise,\nCity Name,\nState - Pin Code.")
-    commissioner_para.alignment = WD_PARAGRAPH_ALIGNMENT.LEFT
-
-    # ✅ Add Assessee (Taxpayer) Details (Centered, 3 lines)
-    doc.add_paragraph()  # Empty line
-    assessee_para = doc.add_paragraph()
-    assessee_para.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-    assessee_para.add_run(f"{assessee_name}\n{assessee_address}\nGSTIN: {gstin}").bold = True
-
-    # ✅ Add Subject Line (Bold)
-    doc.add_paragraph("\nSubject: Reply to Show Cause Notice", style="Heading 2")
-
-    # ✅ Add "Sir," Left Aligned
-    doc.add_paragraph("\nSir,")
-
-    # ✅ Add "BRIEF FACTS OF THE CASE" in center with bold and underline
-    facts_heading = doc.add_paragraph()
-    facts_run = facts_heading.add_run("BRIEF FACTS OF THE CASE")
-    facts_run.bold = True
-    facts_run.underline = True
-    facts_heading.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-
-    # ✅ Add Case Facts in Justified Paragraph with Numbering
-    case_facts_para = doc.add_paragraph()
-    case_facts_para.alignment = WD_PARAGRAPH_ALIGNMENT.JUSTIFY
-    case_facts_list = case_facts.split("\n")
-    for idx, fact in enumerate(case_facts_list, start=1):
-        case_facts_para.add_run(f"{idx}. {fact.strip()}\n")
-
-    # ✅ Save the Word File
     file_path = "output.docx"
     if os.path.exists(file_path):
         os.remove(file_path)
@@ -119,32 +70,21 @@ def create_word_file(assessee_name, assessee_address, gstin, case_facts):
     return file_path
 
 @app.post("/upload/")
-async def upload_pdf(
-    file: UploadFile = File(...), 
-    prompt: str = Form(...)
-):
+async def upload_pdf(file: UploadFile = File(...), prompt: str = Form(...)):
     pdf_path = "latest_uploaded.pdf"
     with open(pdf_path, "wb") as f:
         f.write(await file.read())
 
     extracted_text = extract_text_from_pdf(pdf_path)
     gstin = extract_gstin(extracted_text)
-
-    # ✅ Ask GPT to extract assessee details & case facts
-    assessee_details = get_gpt_response(extracted_text, "Extract the taxpayer's name and address from the document.")
-    case_facts = get_gpt_response(extracted_text, "Extract the facts of the case in a structured paragraph format.")
-
-    # ✅ Parse Assessee Details
-    assessee_name, assessee_address = assessee_details.split("\n")[0], "\n".join(assessee_details.split("\n")[1:])
-
-    word_path = create_word_file(assessee_name, assessee_address, gstin, case_facts)
+    
+    gpt_response = get_gpt_response(extracted_text, prompt)
+    word_path = create_word_file(gpt_response)
 
     return JSONResponse(content={
         "message": "Success",
         "gstin": gstin,
-        "assessee_name": assessee_name,
-        "assessee_address": assessee_address,
-        "extracted_text": case_facts,
+        "extracted_text": gpt_response,
         "download_url": "/download/"
     })
 
